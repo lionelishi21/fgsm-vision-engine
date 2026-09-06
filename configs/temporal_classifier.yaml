@@ -1,0 +1,15 @@
+data_dir: ./data/ufd
+output_dir: ./runs/temporal_move_classifier
+
+# Model: MCG-NJU/videomae-base
+model: MCG-NJU/videomae-base
+
+# Training
+epochs: 50
+batch_size: 1          # 1 clip per GPU; each clip is 16 frames
+lr: 1e-4
+weight_decay: 0.05
+warmup_ratio: 0.1
+mixup_alpha: 0.2
+
+early_stopping_patience: 7

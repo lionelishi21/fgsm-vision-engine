@@ -1,0 +1,9 @@
+data/
+runs/
+*.zip
+*.pt
+*.pth
+*.bin
+*.safetensors
+__pycache__/
+.DS_Store

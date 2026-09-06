@@ -1,0 +1,14 @@
+numpy==2.5.1
+opencv-python==5.0.0.93
+requests
+beautifulsoup4
+Pillow
+scikit-image
+torch
+torchvision
+transformers
+pycocotools
+fastapi
+uvicorn
+streamlink
+pydantic

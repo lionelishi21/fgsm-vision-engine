@@ -1,5 +1,5 @@
-data/
-runs/
+/data/
+/runs/
 *.zip
 *.pt
 *.pth

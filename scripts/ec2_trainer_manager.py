@@ -384,7 +384,7 @@ def main():
     # Launch
     p_launch = subparsers.add_parser("launch", help="Launch EC2 GPU Spot instance")
     p_launch.add_argument("--instance-type", default=DEFAULT_INSTANCE_TYPE, help="e.g. g4dn.xlarge, g5.xlarge")
-    p_launch.add_argument("--volume-size", type=int, default=60, help="Root EBS size in GB")
+    p_launch.add_argument("--volume-size", type=int, default=150, help="Root EBS size in GB")
     p_launch.add_argument("--on-demand", action="store_true", help="Use On-Demand instead of Spot")
     p_launch.set_defaults(func=launch_instance)
 

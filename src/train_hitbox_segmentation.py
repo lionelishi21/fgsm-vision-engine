@@ -129,6 +129,7 @@ def train(data_dir: str, output_dir: str):
         gradient_accumulation_steps=4,
         eval_strategy="epoch",
         save_strategy="epoch",
+        save_total_limit=2,
         learning_rate=5e-5,
         fp16=torch.cuda.is_available(),
         remove_unused_columns=False,

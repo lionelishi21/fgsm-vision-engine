@@ -103,6 +103,7 @@ def train(config_path: str):
         gradient_accumulation_steps=4,
         eval_strategy="epoch",
         save_strategy="epoch",
+        save_total_limit=2,
         learning_rate=float(config.get("lr", 1e-4)),
         weight_decay=config.get("weight_decay", 0.05),
         lr_scheduler_type="cosine",

@@ -23,6 +23,13 @@ fi
 # 2. Ensure dependencies installed (must happen before any `import torch`)
 echo "[2/4] Installing dependencies..."
 pip install --upgrade pip
+
+# Install a known-good stable CUDA 12.1 build first. Letting requirements.txt's
+# unpinned torch resolve on its own pulls whatever is newest on PyPI (CUDA 13
+# wheels as of this writing), which failed cuDNN initialization on this box's
+# Tesla T4 (CUDNN_STATUS_SUBLIBRARY_LOADING_FAILED) - an older GPU architecture
+# than these bleeding-edge builds are primarily validated against.
+pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 
 # 3. Check GPU availability

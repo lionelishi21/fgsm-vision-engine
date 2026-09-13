@@ -288,13 +288,18 @@ def push_code_and_data(args):
         "mkdir -p /home/ubuntu/fgsm-vision-engine"
     ], check=True)
 
-    # Rsync repo files excluding venv & caches
+    # Rsync repo files excluding venv, caches, and stale local checkpoints.
+    # --partial + a keepalived ssh transport: this repo's dataset pushes run
+    # several GB / several minutes, and plain rsync over ssh was getting
+    # dropped ("Broken pipe") mid-transfer without server-side keepalives.
     rsync_cmd = [
-        "rsync", "-avz", "--progress",
+        "rsync", "-avz", "--progress", "--partial",
+        "-e", "ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -o ServerAliveCountMax=10",
         "--exclude", ".venv",
         "--exclude", ".git",
         "--exclude", "__pycache__",
         "--exclude", "*.pyc",
+        "--exclude", "runs/",
         "./", f"ubuntu@{public_ip}:/home/ubuntu/fgsm-vision-engine/"
     ]
     subprocess.run(rsync_cmd, check=True)

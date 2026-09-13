@@ -107,6 +107,14 @@ class UFDSegmentationDataset(Dataset):
         return inputs
 
 
+def find_last_checkpoint(output_dir: str):
+    out = Path(output_dir)
+    if not out.exists():
+        return None
+    checkpoints = sorted(out.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+    return str(checkpoints[-1]) if checkpoints else None
+
+
 def train(data_dir: str, output_dir: str):
     processor = Mask2FormerImageProcessor.from_pretrained(
         "facebook/mask2former-swin-small-coco-instance"
@@ -142,7 +150,10 @@ def train(data_dir: str, output_dir: str):
         eval_dataset=val_dataset,
     )
 
-    trainer.train()
+    resume_from = find_last_checkpoint(output_dir)
+    if resume_from:
+        print(f"Resuming from checkpoint: {resume_from}")
+    trainer.train(resume_from_checkpoint=resume_from)
     model.save_pretrained(output_dir)
     processor.save_pretrained(output_dir)
 

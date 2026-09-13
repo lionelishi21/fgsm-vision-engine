@@ -59,6 +59,13 @@ class FGSMVideoTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
+def find_last_checkpoint(output_dir: Path):
+    if not output_dir.exists():
+        return None
+    checkpoints = sorted(output_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+    return str(checkpoints[-1]) if checkpoints else None
+
+
 def train(config_path: str):
     with open(config_path) as f:
         config = yaml.safe_load(f)
@@ -128,7 +135,10 @@ def train(config_path: str):
         mixup_alpha=config.get("mixup_alpha", 0.2),
     )
 
-    trainer.train()
+    resume_from = find_last_checkpoint(output_dir)
+    if resume_from:
+        print(f"Resuming from checkpoint: {resume_from}")
+    trainer.train(resume_from_checkpoint=resume_from)
     trainer.save_model(output_dir)
     
     test_dataset = UFDTemporalDataset(str(data_dir), split="test", num_frames=16)

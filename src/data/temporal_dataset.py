@@ -5,9 +5,16 @@ Each GIF is a complete move: startup → active → recovery.
 """
 import json
 import math
+import re
 from pathlib import Path
 from typing import List, Tuple, Optional
 import numpy as np
+
+
+def _sanitize(name: str) -> str:
+    # Must match UFDPipeline._sanitize in src/data/ufd_scraper.py - that's
+    # what determined the on-disk move_classification_dataset folder names.
+    return re.sub(r"[^\w\-_]", "_", name.lower())
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
@@ -52,7 +59,7 @@ class UFDTemporalDataset(Dataset):
                 moves = json.load(f)
             
             for move in moves:
-                frame_dir = self.data_dir / "move_classification_dataset" / move["character"] / move["move_name"].lower().replace(" ", "_")
+                frame_dir = self.data_dir / "move_classification_dataset" / move["character"] / _sanitize(move["move_name"])
                 if not frame_dir.exists():
                     continue
                 

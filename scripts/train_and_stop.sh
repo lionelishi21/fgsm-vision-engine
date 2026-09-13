@@ -40,6 +40,19 @@ nvidia-smi || echo "Warning: nvidia-smi failed, checking PyTorch CUDA..."
 python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')" || echo "Warning: PyTorch CUDA check failed, continuing anyway."
 
 # 4. Run Training Jobs
+# Spot instances can be reclaimed by AWS with no warning ("no capacity"
+# interruptions have hit this exact instance type/region repeatedly), and
+# runs/ was previously only uploaded once at the very end - a mid-training
+# interruption lost everything. Sync whatever checkpoints exist so far
+# every 5 minutes in the background so a reclaim only costs a few minutes
+# of progress instead of the whole run.
+( while true; do
+    sleep 300
+    aws s3 sync runs/ s3://metapunish-fgsm-models-storage/runs/ --region us-east-1 --quiet || true
+done ) &
+BACKGROUND_SYNC_PID=$!
+trap "kill $BACKGROUND_SYNC_PID 2>/dev/null || true" EXIT
+
 echo "[4/4] Starting Temporal Move Classifier Training..."
 python3 src/train_temporal_classifier.py --config configs/temporal_classifier.yaml || echo "Temporal classifier exited with code $?"
 

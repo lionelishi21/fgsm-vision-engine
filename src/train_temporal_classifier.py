@@ -109,7 +109,6 @@ def train(config_path: str):
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
         greater_is_better=True,
-        logging_dir=str(output_dir / "logs"),
         logging_steps=10,
         fp16=torch.cuda.is_available(),
         dataloader_num_workers=4,

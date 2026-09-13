@@ -10,7 +10,7 @@ Pillow
 scikit-image
 torch
 torchvision
-transformers
+transformers==5.14.1
 pycocotools
 fastapi
 uvicorn

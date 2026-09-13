@@ -20,15 +20,15 @@ elif [ -d "/opt/conda" ]; then
     source /opt/conda/bin/activate pytorch || true
 fi
 
-# 2. Check GPU availability
-echo "[2/4] Checking GPU..."
-nvidia-smi || echo "Warning: nvidia-smi failed, checking PyTorch CUDA..."
-python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')"
-
-# 3. Ensure dependencies installed
-echo "[3/4] Installing dependencies..."
+# 2. Ensure dependencies installed (must happen before any `import torch`)
+echo "[2/4] Installing dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
+
+# 3. Check GPU availability
+echo "[3/4] Checking GPU..."
+nvidia-smi || echo "Warning: nvidia-smi failed, checking PyTorch CUDA..."
+python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')" || echo "Warning: PyTorch CUDA check failed, continuing anyway."
 
 # 4. Run Training Jobs
 echo "[4/4] Starting Temporal Move Classifier Training..."

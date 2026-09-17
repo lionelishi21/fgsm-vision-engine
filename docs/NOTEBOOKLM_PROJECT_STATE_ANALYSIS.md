@@ -76,12 +76,12 @@ The repository contains curated datasets under `data/ufd/`:
 
 ---
 
-## 4. Cloud Training Infrastructure (AWS `aibridix`)
+## 4. Cloud Training Infrastructure (AWS `aibridix_official`)
 
 To enable cost-effective training without leaving idle GPUs running, a self-terminating cloud pipeline has been established:
 
 * **EC2 Training Manager (`scripts/ec2_trainer_manager.py`)**:
-  * Programmed against AWS Profile `aibridix` (Region: `us-east-1`).
+  * Programmed against AWS Profile `aibridix_official` (Region: `us-east-1`).
   * Provisions cost-effective **Spot GPU Instances** (`g4dn.xlarge` @ ~$0.16/hr or `g5.xlarge` @ ~$0.30/hr).
   * Automatically provisions dedicated security groups (`fgsm-trainer-sg`) and registers SSH keys (`fgsm-trainer-key`).
 * **Auto-Shutdown Script (`scripts/train_and_stop.sh`)**:

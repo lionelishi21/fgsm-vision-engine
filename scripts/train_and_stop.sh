@@ -48,7 +48,7 @@ python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, D
 # of progress instead of the whole run.
 ( while true; do
     sleep 300
-    aws s3 sync runs/ s3://metapunish-fgsm-models-storage/runs/ --region us-east-1 --quiet || true
+    aws s3 sync runs/ s3://fgsm-vision-models-aibridix-official/runs/ --region us-east-1 --quiet || true
 done ) &
 BACKGROUND_SYNC_PID=$!
 trap "kill $BACKGROUND_SYNC_PID 2>/dev/null || true" EXIT
@@ -65,9 +65,9 @@ echo " Saving logs & preparing instance shutdown..."
 echo "=================================================="
 
 echo "Uploading logs and trained models to S3..."
-aws s3 cp "$LOG_FILE" s3://metapunish-fgsm-models-storage/runs/"$LOG_FILE" --region us-east-1 || echo "Warning: Failed to upload log file"
+aws s3 cp "$LOG_FILE" s3://fgsm-vision-models-aibridix-official/runs/"$LOG_FILE" --region us-east-1 || echo "Warning: Failed to upload log file"
 
-if aws s3 sync runs/ s3://metapunish-fgsm-models-storage/runs/ --region us-east-1; then
+if aws s3 sync runs/ s3://fgsm-vision-models-aibridix-official/runs/ --region us-east-1; then
     echo "S3 upload successful. Executing safe shutdown to stop billing..."
     sudo shutdown -h now
 else

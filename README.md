@@ -39,7 +39,7 @@ Scripts to train the models locally or on EC2:
 
 ---
 
-## Remote GPU Training with Auto-Shutdown (AWS `aibridix`)
+## Remote GPU Training with Auto-Shutdown (AWS `aibridix_official`)
 
 To train cost-effectively on AWS without leaving instances running idle, use the built-in EC2 Trainer Manager:
 

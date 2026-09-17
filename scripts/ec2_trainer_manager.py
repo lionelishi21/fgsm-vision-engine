@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 scripts/ec2_trainer_manager.py
-EC2 GPU Training Manager for FGSM using the `aibridix` AWS Profile.
+EC2 GPU Training Manager for FGSM using the `aibridix_official` AWS Profile.
 
 Supports:
 - Provisioning cost-effective Spot/On-Demand GPU instances (g4dn.xlarge, g5.xlarge)
@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 import boto3
 
-AWS_PROFILE = "aibridix"
+AWS_PROFILE = "aibridix_official"
 AWS_REGION = "us-east-1"
 DEFAULT_INSTANCE_TYPE = "g4dn.xlarge"  # NVIDIA T4 16GB VRAM (cheapest spot ~$0.16/hr)
 # Alternative: "g5.xlarge" (NVIDIA A10G 24GB VRAM ~$0.30/hr spot)
@@ -365,11 +365,11 @@ def check_quota(args):
 
 
 def pull_weights(args):
-    print("Pulling trained models from S3 bucket (s3://metapunish-fgsm-models-storage/runs/) to ./runs/ ...")
+    print("Pulling trained models from S3 bucket (s3://fgsm-vision-models-aibridix-official/runs/) to ./runs/ ...")
     os.makedirs("./runs", exist_ok=True)
     sync_cmd = [
         "aws", "s3", "sync",
-        "s3://metapunish-fgsm-models-storage/runs/", "./runs/",
+        "s3://fgsm-vision-models-aibridix-official/runs/", "./runs/",
         "--profile", AWS_PROFILE,
         "--region", AWS_REGION
     ]

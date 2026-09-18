@@ -59,11 +59,37 @@ class FGSMVideoTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
-def find_last_checkpoint(output_dir: Path):
+def find_last_checkpoint(output_dir: Path, expected_train_size: int):
+    # output_dir is often a persistent path (e.g. a mounted Google Drive
+    # folder) reused across unrelated experiments. Blindly resuming from
+    # whatever checkpoint happens to be there once silently continued
+    # training from a completely different, incompatible dataset - so
+    # a fingerprint of the current dataset size must match before trusting
+    # any existing checkpoint.
     if not output_dir.exists():
         return None
     checkpoints = sorted(output_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
-    return str(checkpoints[-1]) if checkpoints else None
+    if not checkpoints:
+        return None
+
+    import json
+    fingerprint_path = output_dir / "dataset_fingerprint.json"
+    recorded_size = None
+    if fingerprint_path.exists():
+        try:
+            recorded_size = json.loads(fingerprint_path.read_text()).get("num_train_images")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if recorded_size != expected_train_size:
+        print(
+            f"Ignoring {len(checkpoints)} existing checkpoint(s) in {output_dir}: "
+            f"recorded dataset size ({recorded_size}) doesn't match the current "
+            f"dataset ({expected_train_size} images) - starting fresh instead of "
+            f"resuming from a possibly incompatible run."
+        )
+        return None
+    return str(checkpoints[-1])
 
 
 def train(config_path: str):
@@ -82,6 +108,9 @@ def train(config_path: str):
     
     import json
     output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "dataset_fingerprint.json").write_text(
+        json.dumps({"num_train_images": len(train_dataset)})
+    )
     with open(output_dir / "label_map.json", "w") as f:
         json.dump({
             "class_to_idx": train_dataset.class_to_idx,
@@ -135,7 +164,7 @@ def train(config_path: str):
         mixup_alpha=config.get("mixup_alpha", 0.2),
     )
 
-    resume_from = find_last_checkpoint(output_dir)
+    resume_from = find_last_checkpoint(output_dir, expected_train_size=len(train_dataset))
     if resume_from:
         print(f"Resuming from checkpoint: {resume_from}")
     trainer.train(resume_from_checkpoint=resume_from)

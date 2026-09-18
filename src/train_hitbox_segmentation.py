@@ -107,12 +107,37 @@ class UFDSegmentationDataset(Dataset):
         return inputs
 
 
-def find_last_checkpoint(output_dir: str):
+def find_last_checkpoint(output_dir: str, expected_train_size: int):
+    # output_dir is often a persistent path (e.g. a mounted Google Drive
+    # folder) reused across unrelated experiments. Blindly resuming from
+    # whatever checkpoint happens to be there once silently continued
+    # training from a completely different, incompatible dataset - so
+    # a fingerprint of the current dataset size must match before trusting
+    # any existing checkpoint.
     out = Path(output_dir)
     if not out.exists():
         return None
     checkpoints = sorted(out.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
-    return str(checkpoints[-1]) if checkpoints else None
+    if not checkpoints:
+        return None
+
+    fingerprint_path = out / "dataset_fingerprint.json"
+    recorded_size = None
+    if fingerprint_path.exists():
+        try:
+            recorded_size = json.loads(fingerprint_path.read_text()).get("num_train_images")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if recorded_size != expected_train_size:
+        print(
+            f"Ignoring {len(checkpoints)} existing checkpoint(s) in {output_dir}: "
+            f"recorded dataset size ({recorded_size}) doesn't match the current "
+            f"dataset ({expected_train_size} images) - starting fresh instead of "
+            f"resuming from a possibly incompatible run."
+        )
+        return None
+    return str(checkpoints[-1])
 
 
 def train(data_dir: str, output_dir: str):
@@ -157,9 +182,15 @@ def train(data_dir: str, output_dir: str):
         eval_dataset=val_dataset,
     )
 
-    resume_from = find_last_checkpoint(output_dir)
+    resume_from = find_last_checkpoint(output_dir, expected_train_size=len(train_dataset))
     if resume_from:
         print(f"Resuming from checkpoint: {resume_from}")
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    (Path(output_dir) / "dataset_fingerprint.json").write_text(
+        json.dumps({"num_train_images": len(train_dataset)})
+    )
+
     trainer.train(resume_from_checkpoint=resume_from)
     model.save_pretrained(output_dir)
     processor.save_pretrained(output_dir)

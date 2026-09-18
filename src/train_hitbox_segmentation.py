@@ -135,8 +135,15 @@ def train(data_dir: str, output_dir: str):
         per_device_train_batch_size=1,
         per_device_eval_batch_size=1,
         gradient_accumulation_steps=4,
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        # Step-based, not epoch-based: on the full dataset one epoch is
+        # ~980 steps, so a capped/interrupted run (Colab session limits,
+        # a max_steps override, etc.) could otherwise finish without ever
+        # crossing a single epoch boundary - and therefore without ever
+        # saving a checkpoint at all.
+        eval_strategy="steps",
+        eval_steps=200,
+        save_strategy="steps",
+        save_steps=200,
         save_total_limit=2,
         learning_rate=5e-5,
         fp16=torch.cuda.is_available(),

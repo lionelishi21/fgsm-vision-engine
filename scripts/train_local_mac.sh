@@ -51,8 +51,19 @@ source .venv/bin/activate
 
 echo "[2/5] Installing dependencies (CPU-only torch)..."
 pip install --upgrade pip
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# PyTorch dropped Intel macOS (x86_64) wheel builds after 2.2.2 - this is the
+# newest version that will actually install here, so it's pinned explicitly
+# rather than left to resolve to "whatever's newest" (which fails on this Mac).
+pip install "torch==2.2.2" "torchvision==0.17.2" --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
+# requirements.txt pins transformers==5.14.1, which requires torch>=2.4 at
+# runtime and silently disables its PyTorch backend otherwise (breaks
+# Mask2FormerImageProcessor). Since torch 2.2.2 is the ceiling on this
+# hardware, override down to the last 4.x transformers release instead -
+# still has Mask2Former, doesn't gate on torch>=2.4. Also re-pin numpy<2:
+# transformers>=5's numpy>=2 requirement otherwise clashes with the
+# numpy 1.x ABI that pycocotools/opencv-python here were compiled against.
+pip install "transformers<5" "numpy<2"
 
 # 2. Dataset - one-time download via presigned S3 URL (read-only, doesn't
 # need any AWS credentials on this machine - just the URL itself)

@@ -25,6 +25,15 @@ class AnalyzeResponse(BaseModel):
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze_video(req: AnalyzeRequest):
     logging.info(f"Received analysis request for {req.youtube_url}")
+    # The loop below returns placeholder detections, not model output. Callers
+    # treat this timeline as ground truth, so only serve it when explicitly
+    # running in mock mode for local development.
+    if os.environ.get("FGSM_MOCK") != "true":
+        return AnalyzeResponse(
+            success=False,
+            message="Vision pipeline not enabled: trained models are not wired into this service yet.",
+            timeline=[],
+        )
     try:
         # 1. Setup Streamlink session with optional bot-bypass configs
         session = streamlink.Streamlink()

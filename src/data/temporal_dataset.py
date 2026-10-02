@@ -15,6 +15,7 @@ def _sanitize(name: str) -> str:
     # Must match UFDPipeline._sanitize in src/data/ufd_scraper.py - that's
     # what determined the on-disk move_classification_dataset folder names.
     return re.sub(r"[^\w\-_]", "_", name.lower())
+import cv2
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
@@ -37,10 +38,16 @@ class UFDTemporalDataset(Dataset):
         split: str = "train",
         num_frames: int = 16,
         augment: bool = True,
+        domain_randomize: bool = False,
     ):
         self.data_dir = Path(data_dir)
         self.num_frames = num_frames
         self.augment = augment and (split == "train")
+        # Simulates the gap between these clean reference clips and real match
+        # VOD footage: heavy compression, downscaled source resolution, and
+        # harsher color/lighting - not more spatial crop/flip augmentation,
+        # which was already present and didn't close that gap on its own.
+        self.domain_randomize = domain_randomize and (split == "train")
         
         # Load metadata
         self.samples = []  # List of (gif_path, character, move_name, num_frames_in_gif)
@@ -143,12 +150,43 @@ class UFDTemporalDataset(Dataset):
             jitter = np.random.uniform(-0.1, 0.1, size=(T, 1, 1, 3))
             video = np.clip(video / 255.0 + jitter, 0, 1)
             video = (video * 255).astype(np.uint8)
-        
+
+        if self.domain_randomize:
+            video = self._simulate_stream_quality(video)
+
         # Resize to target size
         resized = []
         for frame in video:
             img = Image.fromarray(frame)
             img = img.resize((self.IMG_SIZE, self.IMG_SIZE), Image.BILINEAR)
             resized.append(np.array(img))
-        
+
         return np.stack(resized)
+
+    @staticmethod
+    def _simulate_stream_quality(video: np.ndarray) -> np.ndarray:
+        """Degrades clean reference clips to roughly match real match VODs:
+        downscaled source resolution (observed as low as 360p) and heavy
+        re-encode compression artifacts. One random severity per clip, kept
+        consistent across its frames, rather than per-frame (a real stream's
+        quality doesn't change frame-to-frame).
+        """
+        T, H, W, C = video.shape
+
+        # Simulate a low source resolution by downscaling then upscaling back.
+        short_side = np.random.randint(90, 200)
+        scale = short_side / min(H, W)
+        small_h, small_w = max(1, int(H * scale)), max(1, int(W * scale))
+        quality = int(np.random.randint(15, 50))
+
+        out = np.empty_like(video)
+        for i, frame in enumerate(video):
+            small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+            back = cv2.resize(small, (W, H), interpolation=cv2.INTER_LINEAR)
+            ok, encoded = cv2.imencode(".jpg", cv2.cvtColor(back, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, quality])
+            if ok:
+                decoded = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+                out[i] = cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB)
+            else:
+                out[i] = back
+        return out

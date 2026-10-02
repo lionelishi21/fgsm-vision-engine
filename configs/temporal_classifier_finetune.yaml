@@ -1,0 +1,21 @@
+# Fine-tunes the already-trained temporal_move_classifier with heavy
+# domain-randomization augmentation (simulated stream compression + low
+# source resolution), instead of training from scratch again. Point
+# init_from_model at wherever the finished model from
+# temporal_classifier.yaml's run landed (e.g. the Drive/S3 copy).
+data_dir: ./data/ufd
+output_dir: ./runs/temporal_move_classifier_finetune
+init_from_model: ./models/temporal_move_classifier
+
+domain_randomize: true
+
+# Short, low-LR fine-tune - this is adapting an already-converged model to a
+# harder input distribution, not training from random init.
+epochs: 10
+batch_size: 1
+lr: 2e-5
+weight_decay: 0.05
+warmup_ratio: 0.1
+mixup_alpha: 0.2
+
+early_stopping_patience: 4

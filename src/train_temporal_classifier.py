@@ -100,7 +100,8 @@ def train(config_path: str):
     output_dir = Path(config.get("output_dir", "runs/temporal_move_classifier"))
     
     # Load datasets
-    train_dataset = UFDTemporalDataset(str(data_dir), split="train", num_frames=16)
+    domain_randomize = config.get("domain_randomize", False)
+    train_dataset = UFDTemporalDataset(str(data_dir), split="train", num_frames=16, domain_randomize=domain_randomize)
     val_dataset = UFDTemporalDataset(str(data_dir), split="val", num_frames=16)
     
     num_classes = len(train_dataset.class_to_idx)
@@ -117,8 +118,11 @@ def train(config_path: str):
             "idx_to_class": train_dataset.idx_to_class,
         }, f, indent=2)
 
-    model_name = config.get("model", "microsoft/video-swin-tiny-kinetics-400")
-    
+    # init_from_model points at an already-trained checkpoint dir (e.g. the
+    # finished temporal_move_classifier) to fine-tune from, instead of
+    # starting from the HF base checkpoint every time.
+    model_name = config.get("init_from_model") or config.get("model", "microsoft/video-swin-tiny-kinetics-400")
+
     try:
         model = VideoMAEForVideoClassification.from_pretrained(
             model_name,

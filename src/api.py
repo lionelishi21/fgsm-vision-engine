@@ -2,21 +2,42 @@ import cv2
 import streamlink
 import logging
 import os
-import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Mocking the pipeline for the API file to ensure it can start without downloading heavy models immediately
-# In a real run, this would be:
-# from src.inference_v2 import FGSMInferencePipelineV2
-# pipeline = FGSMInferencePipelineV2(...)
+from src.inference import FGSMInferencePipeline, NUM_FRAMES
 
 app = FastAPI(title="FGSM Vision Engine API")
 logging.basicConfig(level=logging.INFO)
 
+# Loaded once at startup from FGSM_MODEL_PATH, if present. Kept optional so the
+# service still boots (and honestly reports itself as disabled) when the model
+# hasn't been synced to this host yet - see src/inference.py for the domain-gap
+# caveat on what this model was actually trained on.
+_MODEL_PATH = os.environ.get("FGSM_MODEL_PATH", "./models/temporal_move_classifier")
+_CONFIDENCE_THRESHOLD = float(os.environ.get("FGSM_CONFIDENCE_THRESHOLD", "0.12"))
+_MAX_CLIPS = int(os.environ.get("FGSM_MAX_CLIPS", "30"))
+
+pipeline: FGSMInferencePipeline | None = None
+try:
+    pipeline = FGSMInferencePipeline(_MODEL_PATH, confidence_threshold=_CONFIDENCE_THRESHOLD)
+    logging.info(f"[FGSM] Loaded model from {_MODEL_PATH} - trained characters: {pipeline.trained_characters}")
+except Exception as e:
+    logging.warning(f"[FGSM] No model loaded ({e}). /api/analyze will report itself as disabled.")
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "model_loaded": pipeline is not None,
+        "trained_characters": pipeline.trained_characters if pipeline else [],
+    }
+
+
 class AnalyzeRequest(BaseModel):
     youtube_url: str
-    
+
 class AnalyzeResponse(BaseModel):
     success: bool
     message: str
@@ -25,13 +46,10 @@ class AnalyzeResponse(BaseModel):
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze_video(req: AnalyzeRequest):
     logging.info(f"Received analysis request for {req.youtube_url}")
-    # The loop below returns placeholder detections, not model output. Callers
-    # treat this timeline as ground truth, so only serve it when explicitly
-    # running in mock mode for local development.
-    if os.environ.get("FGSM_MOCK") != "true":
+    if pipeline is None:
         return AnalyzeResponse(
             success=False,
-            message="Vision pipeline not enabled: trained models are not wired into this service yet.",
+            message="Vision pipeline not enabled: trained model is not loaded on this host.",
             timeline=[],
         )
     try:
@@ -70,36 +88,48 @@ async def analyze_video(req: AnalyzeRequest):
         if not cap.isOpened():
             raise HTTPException(status_code=500, detail="OpenCV could not open the stream")
             
-        # For demonstration: process the first 30 frames (1 second at 30fps)
-        frames_processed = 0
-        max_frames = 30
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+
+        # Read NUM_FRAMES-frame clips and classify each one. Clips below the
+        # confidence threshold, or whose predicted character isn't one of the
+        # ones this model was actually trained on, are skipped rather than
+        # reported - this model was trained on isolated move GIFs, not real
+        # match footage with two characters in frame, so low-confidence or
+        # out-of-distribution output is expected and shouldn't be presented
+        # as ground truth.
         timeline = []
-        
-        while frames_processed < max_frames:
-            ret, frame = cap.read()
-            if not ret:
+        clips_processed = 0
+        frames_read = 0
+
+        while clips_processed < _MAX_CLIPS:
+            clip = []
+            for _ in range(NUM_FRAMES):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                clip.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                frames_read += 1
+            if len(clip) < 2:
                 break
-                
-            # In real implementation: 
-            # results = pipeline.process_frame(frames_processed, 30, [...detections...])
-            # timeline.append(results)
-            
-            # Mocking the results for the API test
+
+            result = pipeline.predict_clip(clip)
+            clips_processed += 1
+            if result is None:
+                continue
+            character, move_name, confidence = result
             timeline.append({
-                "frame": frames_processed,
-                "timestamp": round(frames_processed / 30.0, 3),
+                "frame": frames_read - len(clip),
+                "timestamp": round((frames_read - len(clip)) / fps, 3),
                 "players": [
-                    {"character": "ryu", "move": "standing_heavy_punch", "move_phase": "startup"}
+                    {"character": character, "move": move_name, "confidence": round(confidence, 3)}
                 ]
             })
-            
-            frames_processed += 1
-            
+
         cap.release()
-        
+
         return AnalyzeResponse(
             success=True,
-            message=f"Processed {frames_processed} frames successfully from stream.",
+            message=f"Classified {clips_processed} clip(s) ({frames_read} frames); {len(timeline)} above confidence threshold.",
             timeline=timeline
         )
         

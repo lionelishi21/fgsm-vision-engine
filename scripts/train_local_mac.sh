@@ -58,12 +58,17 @@ pip install "torch==2.2.2" "torchvision==0.17.2" --index-url https://download.py
 pip install -r requirements.txt
 # requirements.txt pins transformers==5.14.1, which requires torch>=2.4 at
 # runtime and silently disables its PyTorch backend otherwise (breaks
-# Mask2FormerImageProcessor). Since torch 2.2.2 is the ceiling on this
-# hardware, override down to the last 4.x transformers release instead -
-# still has Mask2Former, doesn't gate on torch>=2.4. Also re-pin numpy<2:
-# transformers>=5's numpy>=2 requirement otherwise clashes with the
-# numpy 1.x ABI that pycocotools/opencv-python here were compiled against.
-pip install "transformers<5" "numpy<2"
+# Mask2FormerImageProcessor). Just constraining to "<5" isn't enough either:
+# essentially all currently-maintained transformers release lines (including
+# recent 4.x point releases) got backported the CVE-2025-32434 fix, which
+# hard-blocks torch.load (needed by Trainer to restore optimizer.pt/
+# scheduler.pt when resuming a checkpoint) unless torch>=2.6 - and torch is
+# capped at 2.2.2 here regardless. Pin to a specific release from before that
+# fix existed at all, old enough to predate the whole mitigation rather than
+# just an older patch of an affected line. Mask2Former has been stable since
+# its 4.29 introduction, so this doesn't lose any functionality this script
+# needs. Also re-pin numpy<2 to match this era of transformers/pycocotools.
+pip install "transformers==4.44.2" "numpy<2"
 
 # 2. Dataset - one-time download via presigned S3 URL (read-only, doesn't
 # need any AWS credentials on this machine - just the URL itself)

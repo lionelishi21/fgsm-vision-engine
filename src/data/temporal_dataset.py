@@ -23,6 +23,8 @@ import torchvision.transforms as T
 import torchvision.transforms.functional as TF
 from transformers import VideoMAEImageProcessor
 
+from data.footage_sim import consecutive_window, simulate_match_footage, strip_hitboxes
+
 
 class UFDTemporalDataset(Dataset):
     """
@@ -39,6 +41,8 @@ class UFDTemporalDataset(Dataset):
         num_frames: int = 16,
         augment: bool = True,
         domain_randomize: bool = False,
+        simulate_match_footage: bool = False,
+        seed: int = 0,
     ):
         self.data_dir = Path(data_dir)
         self.num_frames = num_frames
@@ -48,6 +52,14 @@ class UFDTemporalDataset(Dataset):
         # harsher color/lighting - not more spatial crop/flip augmentation,
         # which was already present and didn't close that gap on its own.
         self.domain_randomize = domain_randomize and (split == "train")
+        # Replaces the augmentations above with footage_sim's in-match look.
+        # Unlike them it also applies to val/test, with a fixed per-sample
+        # seed: there's only one clip per move, so a simulated-footage
+        # version of it is the closest thing to held-out data available, and
+        # picking the best checkpoint on clean clips just rewards memorizing.
+        self.simulate_match_footage = simulate_match_footage
+        self.split = split
+        self.seed = seed
         
         # Load metadata
         self.samples = []  # List of (gif_path, character, move_name, num_frames_in_gif)
@@ -91,7 +103,11 @@ class UFDTemporalDataset(Dataset):
 
     def __getitem__(self, idx):
         frames, label, class_name = self.samples[idx]
-        
+
+        if self.simulate_match_footage:
+            video = self._match_footage_clip(idx)
+            return self._to_item(video, label, class_name)
+
         # Sample num_frames uniformly
         indices = self._sample_indices(len(frames))
         
@@ -105,7 +121,34 @@ class UFDTemporalDataset(Dataset):
         
         # Apply transforms
         video = self._transform(video)
-        
+        return self._to_item(video, label, class_name)
+
+    def _match_footage_clip(self, idx: int) -> np.ndarray:
+        frames = self.samples[idx][0]
+        if self.split == "train":
+            rng = np.random.default_rng()
+        else:
+            rng = np.random.default_rng([self.seed, idx])
+
+        if self.split == "train" and rng.random() < 0.3:
+            indices = self._sample_indices(len(frames))
+        else:
+            indices = consecutive_window(len(frames), self.num_frames, rng)
+
+        clip = [strip_hitboxes(np.array(Image.open(frames[i]).convert("RGB"))) for i in indices]
+
+        # Another move's frame as the backdrop, so the background doesn't
+        # always match the clip's own stage position.
+        other = self.samples[int(rng.integers(0, len(self.samples)))][0]
+        background = strip_hitboxes(np.array(Image.open(other[int(rng.integers(0, len(other)))]).convert("RGB")))
+
+        clip = simulate_match_footage(clip, rng, background=background)
+        return np.stack([
+            np.array(Image.fromarray(f).resize((self.IMG_SIZE, self.IMG_SIZE), Image.BILINEAR))
+            for f in clip
+        ])
+
+    def _to_item(self, video: np.ndarray, label: int, class_name: str) -> dict:
         # Permute to T, C, H, W (works with both Normalize and VideoMAE)
         video = torch.from_numpy(video).permute(0, 3, 1, 2).float() / 255.0
         

@@ -53,11 +53,22 @@ done ) &
 BACKGROUND_SYNC_PID=$!
 trap "kill $BACKGROUND_SYNC_PID 2>/dev/null || true" EXIT
 
-echo "[4/4] Starting Temporal Move Classifier Training..."
-python3 src/train_temporal_classifier.py --config configs/temporal_classifier.yaml || echo "Temporal classifier exited with code $?"
+# Optional overrides (set by `ec2_trainer_manager.py start-training`):
+#   SCRAPE_ROSTER=1      scrape every UFD character's move GIFs first
+#   TRAIN_CONFIG=...     classifier config (default configs/temporal_classifier.yaml)
+#   SKIP_SEGMENTATION=1  train only the classifier
+if [ "${SCRAPE_ROSTER:-0}" = "1" ]; then
+    echo "Scraping move GIFs for the full UFD roster..."
+    python3 src/scripts/scrape_ufd_gifs.py
+fi
 
-echo "Starting Hitbox Segmentation Training..."
-python3 src/train_hitbox_segmentation.py --data data/ufd/segmentation_dataset --output runs/hitbox_segmenter || echo "Segmentation exited with code $?"
+echo "[4/4] Starting Temporal Move Classifier Training..."
+python3 src/train_temporal_classifier.py --config "${TRAIN_CONFIG:-configs/temporal_classifier.yaml}" || echo "Temporal classifier exited with code $?"
+
+if [ "${SKIP_SEGMENTATION:-0}" != "1" ]; then
+    echo "Starting Hitbox Segmentation Training..."
+    python3 src/train_hitbox_segmentation.py --data data/ufd/segmentation_dataset --output runs/hitbox_segmenter || echo "Segmentation exited with code $?"
+fi
 
 echo "=================================================="
 echo " Training finished at $(date)!"

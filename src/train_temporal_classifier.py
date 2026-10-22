@@ -101,8 +101,11 @@ def train(config_path: str):
     
     # Load datasets
     domain_randomize = config.get("domain_randomize", False)
-    train_dataset = UFDTemporalDataset(str(data_dir), split="train", num_frames=16, domain_randomize=domain_randomize)
-    val_dataset = UFDTemporalDataset(str(data_dir), split="val", num_frames=16)
+    simulate = config.get("simulate_match_footage", False)
+    train_dataset = UFDTemporalDataset(str(data_dir), split="train", num_frames=16,
+                                       domain_randomize=domain_randomize, simulate_match_footage=simulate)
+    val_dataset = UFDTemporalDataset(str(data_dir), split="val", num_frames=16,
+                                     simulate_match_footage=simulate, seed=1)
     
     num_classes = len(train_dataset.class_to_idx)
     print(f"Training on {num_classes} move classes")
@@ -116,6 +119,9 @@ def train(config_path: str):
         json.dump({
             "class_to_idx": train_dataset.class_to_idx,
             "idx_to_class": train_dataset.idx_to_class,
+            # Read by FGSMInferencePipeline: frames must get the same
+            # hitbox-tint stripping at inference that they got in training.
+            "preprocess": {"strip_hitboxes": simulate},
         }, f, indent=2)
 
     # init_from_model points at an already-trained checkpoint dir (e.g. the
@@ -174,7 +180,8 @@ def train(config_path: str):
     trainer.train(resume_from_checkpoint=resume_from)
     trainer.save_model(output_dir)
     
-    test_dataset = UFDTemporalDataset(str(data_dir), split="test", num_frames=16)
+    test_dataset = UFDTemporalDataset(str(data_dir), split="test", num_frames=16,
+                                      simulate_match_footage=simulate, seed=2)
     test_results = trainer.evaluate(test_dataset)
     print(f"\nTest Accuracy: {test_results['eval_accuracy']:.4f}")
     

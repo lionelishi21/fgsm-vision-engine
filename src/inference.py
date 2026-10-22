@@ -21,6 +21,11 @@ import torchvision.transforms as T
 from PIL import Image
 from transformers import VideoMAEForVideoClassification
 
+try:
+    from src.data.footage_sim import strip_hitboxes
+except ImportError:  # run with src/ itself on sys.path (evaluate_generalization.py)
+    from data.footage_sim import strip_hitboxes
+
 IMG_SIZE = 224
 NUM_FRAMES = 16
 _NORMALIZE = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -37,6 +42,9 @@ class FGSMInferencePipeline:
         # json.dump always writes dict keys as strings, so idx_to_class needs int keys back.
         self.idx_to_class = {int(k): v for k, v in label_map["idx_to_class"].items()}
         self.trained_characters = sorted({cls.split(":", 1)[0] for cls in self.idx_to_class.values()})
+        # Models trained with simulate_match_footage saw every frame with the
+        # UFD hitbox tint stripped, so real frames need the same transform.
+        self.strip_hitboxes = label_map.get("preprocess", {}).get("strip_hitboxes", False)
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = VideoMAEForVideoClassification.from_pretrained(model_dir)
@@ -49,7 +57,8 @@ class FGSMInferencePipeline:
         indices = self._sample_indices(len(frames))
         resized = []
         for i in indices:
-            img = Image.fromarray(frames[i]).resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+            frame = strip_hitboxes(frames[i]) if self.strip_hitboxes else frames[i]
+            img = Image.fromarray(frame).resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
             resized.append(np.array(img))
         video = np.stack(resized).astype(np.float32) / 255.0
         video = torch.from_numpy(video).permute(0, 3, 1, 2).float()

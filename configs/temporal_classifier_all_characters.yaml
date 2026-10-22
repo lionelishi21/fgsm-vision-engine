@@ -1,0 +1,25 @@
+# Full SF6 roster (scrape with src/scripts/scrape_ufd_gifs.py first), trained
+# on simulated match footage: hitbox tint stripped, character shrunk to
+# in-match size on a 16:9 canvas, consecutive-frame windows, hue shift and
+# stream compression (src/data/footage_sim.py). Validation uses fixed
+# simulated versions of each clip, so the best checkpoint is the one that
+# holds up on match-like input, not the one that memorized the clean clips.
+#
+# Starts from the 5-character model's backbone; the classifier head is
+# re-initialized because the class count changes.
+data_dir: ./data/ufd
+output_dir: ./runs/temporal_move_classifier_all_characters
+init_from_model: ./models/temporal_move_classifier
+
+simulate_match_footage: true
+
+epochs: 40
+batch_size: 1
+lr: 5e-5
+weight_decay: 0.05
+warmup_ratio: 0.1
+mixup_alpha: 0.2
+
+# The augmentation is heavy and val is noisy (one clip per move), so give it
+# more room than the clean-data config before stopping.
+early_stopping_patience: 8

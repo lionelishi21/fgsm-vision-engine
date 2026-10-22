@@ -300,8 +300,12 @@ def push_code_and_data(args):
         "--exclude", "__pycache__",
         "--exclude", "*.pyc",
         "--exclude", "runs/",
-        "./", f"ubuntu@{public_ip}:/home/ubuntu/fgsm-vision-engine/"
     ]
+    if args.no_dataset:
+        # The box will build data/ufd itself (start-training --scrape-roster).
+        rsync_cmd += ["--exclude", "data/"]
+    rsync_cmd.append("./")
+    rsync_cmd.append(f"ubuntu@{public_ip}:/home/ubuntu/fgsm-vision-engine/")
     subprocess.run(rsync_cmd, check=True)
     print("\nSync completed successfully!")
 
@@ -317,10 +321,18 @@ def start_training(args):
     public_ip = inst["PublicIpAddress"]
     print(f"Launching self-terminating training job on ubuntu@{public_ip}...")
 
+    env = []
+    if args.scrape_roster:
+        env.append("SCRAPE_ROSTER=1")
+    if args.config:
+        env.append(f"TRAIN_CONFIG={args.config}")
+    if args.classifier_only:
+        env.append("SKIP_SEGMENTATION=1")
+
     cmd = (
         "cd /home/ubuntu/fgsm-vision-engine && "
         "chmod +x scripts/train_and_stop.sh && "
-        "nohup bash scripts/train_and_stop.sh > training_job.log 2>&1 & "
+        f"nohup env {' '.join(env)} bash scripts/train_and_stop.sh > training_job.log 2>&1 & "
         "echo 'Training job started in background!'"
     )
     subprocess.run([
@@ -408,9 +420,13 @@ def main():
 
     # Push / Train / Pull
     p_push = subparsers.add_parser("push", help="Rsync code and datasets to remote instance")
+    p_push.add_argument("--no-dataset", action="store_true", help="Skip data/ (use with start-training --scrape-roster)")
     p_push.set_defaults(func=push_code_and_data)
 
     p_train = subparsers.add_parser("start-training", help="Launch background training with auto-shutdown")
+    p_train.add_argument("--config", help="Classifier config, e.g. configs/temporal_classifier_all_characters.yaml")
+    p_train.add_argument("--scrape-roster", action="store_true", help="Scrape every UFD character's move GIFs on the box first")
+    p_train.add_argument("--classifier-only", action="store_true", help="Skip hitbox segmentation training")
     p_train.set_defaults(func=start_training)
 
     p_pull = subparsers.add_parser("pull", help="Pull trained weights and runs back to local")

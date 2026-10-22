@@ -261,6 +261,28 @@ class UFDPipeline:
         self._build_move_dataset(all_moves, move_dir)
         self._build_frame_data_oracle(all_moves)
 
+    def generate_move_dataset(self, characters: List[str]):
+        """Classification dataset only, written one character at a time.
+        generate_training_datasets holds every decoded frame and mask in
+        memory until the end, which for the full roster (~30 characters) is
+        tens of GB - more than a training box has."""
+        move_dir = self.output_dir / "move_classification_dataset"
+        move_dir.mkdir(exist_ok=True)
+
+        all_moves = []
+        for char in characters:
+            try:
+                moves = self.scrape_character(char)
+            except requests.exceptions.RequestException as e:
+                print(f"  ! Skipping character '{char}': {e}")
+                continue
+            self._build_move_dataset(moves, move_dir)
+            for move in moves:
+                move.frames, move.masks = [], []
+            all_moves.extend(moves)
+
+        self._build_frame_data_oracle(all_moves)
+
     def _build_segmentation_dataset(self, moves: List[UFDMove], out_dir: Path):
         import json
         
